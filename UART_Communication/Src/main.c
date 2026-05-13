@@ -1,91 +1,45 @@
-#include <stdint.h>
+#include <string.h>
+#include "registers.h"
+#include "uart.h"
+#include "led.h"
 
-#define RCC_BASE        0x40023800
-#define GPIOA_BASE      0x40020000
-#define USART2_BASE     0x40004400
-
-/* RCC Registers */
-#define RCC_AHB1ENR     (*(volatile uint32_t *)(RCC_BASE + 0x30))
-#define RCC_APB1ENR     (*(volatile uint32_t *)(RCC_BASE + 0x40))
-
-/* GPIOA Registers */
-#define GPIOA_MODER     (*(volatile uint32_t *)(GPIOA_BASE + 0x00))
-#define GPIOA_AFRL      (*(volatile uint32_t *)(GPIOA_BASE + 0x20))
-
-/* USART2 Registers */
-#define USART2_SR       (*(volatile uint32_t *)(USART2_BASE + 0x00))
-#define USART2_DR       (*(volatile uint32_t *)(USART2_BASE + 0x04))
-#define USART2_BRR      (*(volatile uint32_t *)(USART2_BASE + 0x08))
-#define USART2_CR1      (*(volatile uint32_t *)(USART2_BASE + 0x0C))
-
-void USART2_Init(void);
-void USART2_WriteChar(char ch);
-void USART2_WriteString(char *str);
+void init_clk (void);
 
 int main(void)
 {
-    USART2_Init();
+    char command[10];
+    init_clk();
+    init_uart();
+    init_led();
 
-    for(int i=0; i<1; i++)
+    write_uart_string("Welcome to STM32 UART Communication\r\n");
+    write_uart_string("UART Communication Initialized\r\n");
+    write_uart_string("Enter a command \"ON\" to turn on the LED and \"OFF\" to turn it off\r\n");
+    while(1)
     {
-        USART2_WriteString("Hey Guys\r\n");
-        USART2_WriteString("We are using UART Communication on STM32 \r\n");
-
-        for(volatile int i = 0; i < 500000; i++); // Delay
-    }
+        memset(command, 0, sizeof(command));  // Clear the command buffer before reading new input
+        read_uart_string(command, sizeof(command));
+        if (strcmp(command, "ON") == 0)
+        {
+            turn_on_led();
+            write_uart_string("\nLED is turned ON\r\n");
+        }
+        else if (strcmp(command, "OFF") == 0)
+        {
+            turn_off_led();
+            write_uart_string("\nLED is turned OFF\r\n");
+        }
+        else
+        {
+            write_uart_string("\nInvalid command. Please enter \"ON\" or \"OFF\"\r\n");
+        }
+   }
 }
 
-void USART2_Init(void)
+void init_clk (void)
 {
-    /* Enable GPIOA clock */
+    // Enable GPIOA clock
     RCC_AHB1ENR |= (1 << 0);
-
-    /* Enable USART2 clock */
+    // Enable USART2 clock
     RCC_APB1ENR |= (1 << 17);
-
-    /* Set PA2 and PA3 to Alternate Function mode */
-    GPIOA_MODER &= ~(0xF << 4);
-    GPIOA_MODER |=  (0xA << 4);
-
-    /* Set AF7 for USART2 */
-    GPIOA_AFRL &= ~(0xFF << 8);
-    GPIOA_AFRL |=  (0x77 << 8);
-
-    /*
-      Baud Rate Calculation
-
-      Assuming:
-      APB1 Clock = 16 MHz
-
-      Baud Rate = 9600
-
-      USARTDIV = 16000000 / (16 * 9600)
-                = 104.166
-
-      BRR = 0x0683
-    */
-
-    USART2_BRR = 0x0683;
-
-    /* Enable Transmitter */
-    USART2_CR1 |= (1 << 3);
-
-    /* Enable USART */
-    USART2_CR1 |= (1 << 13);
-}
-
-void USART2_WriteChar(char ch)
-{
-    /* Wait until TX buffer empty */
-    while(!(USART2_SR & (1 << 7)));
-
-    USART2_DR = ch;
-}
-
-void USART2_WriteString(char *str)
-{
-    while(*str)
-    {
-        USART2_WriteChar(*str++);
-    }
 }
