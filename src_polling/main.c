@@ -1,4 +1,4 @@
-/* USER CODE BEGIN Header */
+// ADC_ Polling : ADC using potentiometer/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
   * @file           : main.c
@@ -17,15 +17,13 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include<stdio.h>
+#include<string.h>
 #include "main.h"
-#include "fatfs.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdio.h>
-#include <string.h>
-#include <stdarg.h>
-#include "user_diskio_spi.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,39 +42,28 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-SPI_HandleTypeDef hspi1;
+ADC_HandleTypeDef hadc1;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+uint32_t voltage;
+char txBuffer[50];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_SPI1_Init(void);
+static void MX_ADC1_Init(void);
 static void MX_USART2_UART_Init(void);
+
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void myprintf(const char *fmt, ...) {
-  static char buffer[256];
-  va_list args;
-  va_start(args, fmt);
-  vsnprintf(buffer, sizeof(buffer), fmt, args);
-  va_end(args);
-
-  int len = strlen(buffer);
-  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, len, -1);
-
-}
-
-
-/* USER CODE END 0 */
 
 /* USER CODE END 0 */
 
@@ -109,143 +96,39 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_SPI1_Init();
+  MX_ADC1_Init();
   MX_USART2_UART_Init();
-  MX_FATFS_Init();
-
   /* USER CODE BEGIN 2 */
-  if (retUSER != 0)
-  {
-      Error_Handler();
-  }
- 
-   myprintf("\r\n~ SD card demo by Vishal \r\n\r\n");
 
-   HAL_Delay(1000); //a short delay is important to let the SD card settle
-
-    //some variables for FatFs
-    FATFS FatFs; 	//Fatfs handle
-    FIL fil; 		//File handle
-    FRESULT fres; //Result after operations
-
-  //  =======================xxxx============================================
-uint8_t needtest =0;
-if(needtest)
-{
-  uint8_t response = SD_Test_CMD0();
-    myprintf("CMD0 Response = 0x%02X\r\n", response);
-
-    if(response == 0x01)
-    {
-        int count = 0;
-        response= SD_Test_CMD8();
-        myprintf("CMD8 Response = 0x%02X\r\n", response);
-
-      do
-      {
-        response = SD_Test_ACMD41();
-
-        myprintf("ACMD41 = 0x%02X\r\n", response);
-
-        HAL_Delay(10);
-
-        count++;
-
-      } while((response == 0x01) && (count < 200));
-
-      response = SD_Test_CMD58();
-
-      myprintf("CMD58 = 0x%02X\r\n", response);
-    }}
-
-
-// =================================xxxx==============================================
-if(! needtest)
-{
-
-    //Open the file system
-    fres = f_mount(&FatFs, "", 1); //1=mount now
-    if (fres != FR_OK) {
-    myprintf("f_mount error (%i)\r\n", fres);
-    while(1);
-    }
-
-    //Let's get some statistics from the SD card
-    DWORD free_clusters, free_sectors, total_sectors;
-
-    FATFS* getFreeFs;
-
-    fres = f_getfree("", &free_clusters, &getFreeFs);
-    if (fres != FR_OK) {
-    myprintf("f_getfree error (%i)\r\n", fres);
-    while(1);
-    }
-
-    //Formula comes from ChaN's documentation
-    total_sectors = (getFreeFs->n_fatent - 2) * getFreeFs->csize;
-    free_sectors = free_clusters * getFreeFs->csize;
-
-    myprintf("SD card stats:\r\n%10lu KiB total drive space.\r\n%10lu KiB available.\r\n", total_sectors / 2, free_sectors / 2);
-
-    //Now let's try to open file "test.txt"
-    fres = f_open(&fil, "file.txt", FA_READ);
-    if (fres != FR_OK) {
-    myprintf("f_open error (%i)\r\n", fres);
-  // 	while(1);
-    }
-    myprintf("I was able to open 'test.txt' for reading!\r\n");
-
-    //Read 30 bytes from "test.txt" on the SD card
-    BYTE readBuf[30];
-
-    //We can either use f_read OR f_gets to get data out of files
-    //f_gets is a wrapper on f_read that does some string formatting for us
-    TCHAR* rres = f_gets((TCHAR*)readBuf, 30, &fil);
-    if(rres != 0) {
-    myprintf("Read string from 'test.txt' contents: %s\r\n", readBuf);
-    } else {
-    myprintf("f_gets error (%i)\r\n", fres);
-    }
-
-  // Be a tidy kiwi - don't forget to close your file!
-    f_close(&fil);
-
-    //Now let's try and write a file "write.txt"
-    fres = f_open(&fil, "write.txt", FA_WRITE | FA_OPEN_ALWAYS | FA_CREATE_ALWAYS);
-    if(fres == FR_OK) {
-    myprintf("I was able to open 'write.txt' for writing\r\n");
-    } else {
-    myprintf("f_open error (%i)\r\n", fres);
-    }
-
-    //Copy in a string
-    strcpy((char *)readBuf, "a new file is made!");
-    UINT bytesWrote;
-    fres = f_write(&fil, readBuf, strlen((char *)readBuf), &bytesWrote);
-    if(fres == FR_OK) {
-    myprintf("Wrote %i bytes to 'write.txt'!\r\n", bytesWrote);
-    } else {
-    myprintf("f_write error (%i)\r\n", fres);
-    }
-
-    //Be a tidy kiwi - don't forget to close your file!
-    f_close(&fil);
-
-    //We're done, so de-mount the drive
-    f_mount(NULL, "", 0);
-
-    /* USER CODE END 2 */
-    HAL_Delay(100);
-}
-
+  /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
+      HAL_ADC_Start(&hadc1);
 
-    /* USER CODE BEGIN 3 */
+      if (HAL_ADC_PollForConversion(&hadc1, 100) == HAL_OK)
+      {
+          uint32_t value = HAL_ADC_GetValue(&hadc1);
+          voltage = (value * 3300U) / 4095U;
+
+          sprintf(txBuffer, "Voltage = %lu mV\r\n", voltage);
+
+          HAL_UART_Transmit(&huart2,
+                            (uint8_t *)txBuffer,
+                            strlen(txBuffer),
+                            HAL_MAX_DELAY);
+      }
+      else
+      {
+          HAL_UART_Transmit(&huart2,
+                            (uint8_t *)"Timeout\r\n",
+                            9,
+                            HAL_MAX_DELAY);
+      }
+
+      HAL_Delay(1000);
   }
   /* USER CODE END 3 */
 }
@@ -272,9 +155,9 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 64;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLM = 16;
+  RCC_OscInitStruct.PLL.PLLN = 336;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
   RCC_OscInitStruct.PLL.PLLQ = 2;
   RCC_OscInitStruct.PLL.PLLR = 2;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -298,40 +181,54 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief SPI1 Initialization Function
+  * @brief ADC1 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_SPI1_Init(void)
+static void MX_ADC1_Init(void)
 {
 
-  /* USER CODE BEGIN SPI1_Init 0 */
+  /* USER CODE BEGIN ADC1_Init 0 */
 
-  /* USER CODE END SPI1_Init 0 */
+  /* USER CODE END ADC1_Init 0 */
 
-  /* USER CODE BEGIN SPI1_Init 1 */
+  ADC_ChannelConfTypeDef sConfig = {0};
 
-  /* USER CODE END SPI1_Init 1 */
-  /* SPI1 parameter configuration*/
-  hspi1.Instance = SPI1;
-  hspi1.Init.Mode = SPI_MODE_MASTER;
-  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
-  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi1.Init.CRCPolynomial = 10;
-  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN SPI1_Init 2 */
 
-  /* USER CODE END SPI1_Init 2 */
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_144CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
 
 }
 
@@ -351,7 +248,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 9600;
+  huart2.Init.BaudRate = 115200;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -375,24 +272,12 @@ static void MX_USART2_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
 
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
-
-  /*Configure GPIO pin : SPI1_CS_Pin */
-  GPIO_InitStruct.Pin = SPI1_CS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SPI1_CS_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
@@ -433,3 +318,8 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+
+
+
+
+
